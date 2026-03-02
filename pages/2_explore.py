@@ -72,20 +72,17 @@ FEATURES = {
     'Credit History (months)':  ('Credit_History_Months',    0,   500),
     'Age':                      ('Age',                      18,  80),
     'EMI Monthly ($)':          ('Total_EMI_per_month',      0,   2000),
-    '── ENGINEERED ──': None,
     'Debt-to-Income ★':         ('Debt_to_Income',           0,   3),
     'EMI Burden ★':             ('EMI_Burden',               0,   0.5),
     'Stress Index ★':           ('Stress_Index',             0,   0.8),
 }
 
-valid = {k:v for k,v in FEATURES.items() if v is not None}
-
 sel_col, chart_col = st.columns([1,3])
 
 with sel_col:
     st.markdown("<div style='font-family:DM Mono,monospace;font-size:0.58rem;color:#252535;letter-spacing:3px;margin-bottom:10px'>FEATURE</div>", unsafe_allow_html=True)
-    sel = st.radio("", list(valid.keys()), label_visibility='collapsed')
-    col_name, xmin, xmax = valid[sel]
+    sel = st.radio("", list(FEATURES.keys()), label_visibility='collapsed')
+    col_name, xmin, xmax = FEATURES[sel]
 
     st.markdown("<br><div style='font-family:DM Mono,monospace;font-size:0.58rem;color:#252535;letter-spacing:3px;margin-bottom:10px'>CHART</div>", unsafe_allow_html=True)
     ctype = st.radio("chart", ['Histogram','Box','Violin'], label_visibility='collapsed')
@@ -126,7 +123,6 @@ with chart_col:
                                  font=dict(color='#444460',size=11,family='DM Mono')))
     st.plotly_chart(fig, use_container_width=True)
 
-    # Stats table
     rows = []
     for s in ['Good','Standard','Poor']:
         d = df[df['Credit_Score']==s][col_name].dropna()
@@ -135,7 +131,7 @@ with chart_col:
                      'Mean':f'{d.mean():.2f}','Std':f'{d.std():.2f}'})
     st.dataframe(pd.DataFrame(rows).set_index('Tier'), use_container_width=True)
 
-# Bubble chart
+# ── Bubble chart ──────────────────────────────────────────────────────────────
 st.markdown('<div style="width:100%;height:1px;background:#16161F;margin:32px 0"></div>', unsafe_allow_html=True)
 st.markdown("""
 <div style='font-family:DM Mono,monospace;font-size:0.58rem;
@@ -164,9 +160,12 @@ for s,c in [('Poor',POOR),('Standard',STD),('Good',GOOD)]:
                     line=dict(color=c,width=0.5)),
         hovertemplate=f'<b>{s}</b><br>Income: $%{{x:,.0f}}<br>Debt: $%{{y:,.0f}}<extra></extra>'
     ))
+
+# Build xaxis/yaxis dicts by extending BASE values — no duplicate kwargs
 figb.update_layout(**BASE, height=400,
                    title=dict(text='Income vs Outstanding Debt — sampled',
-                              font=dict(color='#444460',size=11,family='DM Mono')),
-                   xaxis=dict(**BASE['xaxis'], tickformat='$,.0f', title='Annual Income ($)'),
-                   yaxis=dict(**BASE['yaxis'], tickformat='$,.0f', title='Outstanding Debt ($)'))
+                              font=dict(color='#444460',size=11,family='DM Mono')))
+figb.update_xaxes(tickformat='$,.0f', title_text='Annual Income ($)')
+figb.update_yaxes(tickformat='$,.0f', title_text='Outstanding Debt ($)')
+
 st.plotly_chart(figb, use_container_width=True)
