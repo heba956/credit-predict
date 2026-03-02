@@ -230,9 +230,8 @@ for s,c in [('Poor',POOR),('Standard',STD),('Good',GOOD)]:
 fig3.update_layout(**BASE, showlegend=False, height=200,
                    title=dict(text='Avg Credit History by Tier',
                               font=dict(color='#444460',size=11,family='DM Mono')),
-                   xaxis_title='Years',
-                   yaxis=dict(gridcolor=GRID, linecolor=GRID, zerolinecolor=GRID,
-                              tickfont=dict(color='#888899', size=11)))
+                   xaxis_title='Years')
+fig3.update_yaxes(tickfont=dict(color='#888899', size=11))
 st.plotly_chart(fig3, use_container_width=True)
 
 st.markdown('<div style="height:24px"></div>', unsafe_allow_html=True)
