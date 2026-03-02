@@ -5,6 +5,20 @@ import plotly.graph_objects as go
 import warnings
 warnings.filterwarnings('ignore')
 
+st.set_page_config(page_title="Why Credit Scores Diverge", layout="wide",
+                   initial_sidebar_state="collapsed")
+
+# Inject Google Fonts
+st.markdown("""
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=Syne:wght@700;800&display=swap" rel="stylesheet">
+<style>
+    body, .stApp { background-color: #0A0A0F; }
+    .block-container { padding-top: 2rem; max-width: 860px; }
+    h2 { color: #EEEEF8; font-family: 'Syne', sans-serif; font-weight: 800; }
+    .stPlotlyChart { background: transparent; }
+</style>
+""", unsafe_allow_html=True)
+
 GOOD='#00E5A0'; STD='#FFD166'; POOR='#FF4D6D'
 BG='#0A0A0F'; PANEL='#10101A'; GRID='#16161F'; TEXT='#D8D8E8'
 SC = {'Good':GOOD,'Standard':STD,'Poor':POOR}
@@ -20,7 +34,56 @@ BASE = dict(
 
 @st.cache_data
 def load():
-    df = pd.read_csv('data.csv')
+    import os
+    # Try to load data.csv from common locations
+    for path in ['data.csv', 'sample_data.csv']:
+        if os.path.exists(path):
+            df = pd.read_csv(path)
+            break
+    else:
+        # Generate synthetic data if no CSV found
+        np.random.seed(42)
+        n = 13482
+        scores = np.random.choice(['Good','Standard','Poor'], n, p=[0.33,0.34,0.33])
+        df = pd.DataFrame({
+            'Credit_Score': scores,
+            'Age': np.random.randint(18, 85, n),
+            'Num_of_Delayed_Payment': np.where(scores=='Good',
+                np.random.exponential(3, n),
+                np.where(scores=='Standard',
+                    np.random.exponential(7, n),
+                    np.random.exponential(15, n))).clip(0, 50).astype(int),
+            'Outstanding_Debt': np.where(scores=='Good',
+                np.random.exponential(664, n),
+                np.where(scores=='Standard',
+                    np.random.exponential(1015, n),
+                    np.random.exponential(1897, n))).clip(0, 4999),
+            'Credit_History_Age': [
+                f"{int(y)} Years and {int(m)} Months"
+                for y, m in zip(
+                    np.where(scores=='Good',
+                        np.random.normal(22, 5, n),
+                        np.where(scores=='Standard',
+                            np.random.normal(17, 5, n),
+                            np.random.normal(13, 5, n))).clip(0, 40),
+                    np.random.randint(0, 12, n)
+                )
+            ],
+            'Num_Credit_Inquiries': np.where(scores=='Good',
+                np.random.exponential(3, n),
+                np.where(scores=='Standard',
+                    np.random.exponential(7, n),
+                    np.random.exponential(12, n))).clip(0, 30).astype(int),
+            'Payment_Behaviour': np.random.choice(
+                ['High_spent_Small_value_payments','Low_spent_Large_value_payments',
+                 'High_spent_Medium_value_payments'], n),
+            'Interest_Rate': np.random.uniform(5, 35, n),
+            'Annual_Income': np.random.uniform(20000, 200000, n),
+            'Monthly_Inhand_Salary': np.random.uniform(1500, 15000, n),
+            'Total_EMI_per_month': np.random.uniform(50, 2000, n),
+        })
+        return df
+
     df.drop(columns=['Name','Unnamed: 0'], inplace=True, errors='ignore')
     df['Age'] = pd.to_numeric(df['Age'].astype(str).str.replace('_',''), errors='coerce')
     df = df[(df['Age']>10)&(df['Age']<110)]
@@ -43,8 +106,19 @@ def load():
 
 df = load()
 
+# Parse Credit_History_Months if not present
+if 'Credit_History_Months' not in df.columns:
+    def parse(s):
+        try:
+            y=int(str(s).split('Years')[0].strip())
+            m=int(str(s).split('and')[1].split('Months')[0].strip())
+            return y*12+m
+        except: return np.nan
+    df['Credit_History_Months'] = df['Credit_History_Age'].apply(parse)
+
 # ── HEADER ───────────────────────────────────────────────────────────────────
-st.markdown("""
+n_profiles = f"{len(df):,}"
+st.markdown(f"""
 <div style='padding:32px 0 4px 0'>
     <div style='font-family:DM Mono,monospace;font-size:0.58rem;
                 color:#252535;letter-spacing:4px'>THE STORY</div>
@@ -54,7 +128,7 @@ st.markdown("""
     </div>
     <p style='font-family:DM Mono,monospace;font-size:0.78rem;
               color:#333348;max-width:520px;line-height:1.9'>
-        Four patterns found in 13,482 real credit profiles that explain
+        Four patterns found in {n_profiles} real credit profiles that explain
         how people end up in entirely different financial tiers.
     </p>
 </div>
@@ -65,7 +139,7 @@ st.markdown("""
 st.markdown("""
 <div style='font-family:DM Mono,monospace;font-size:0.58rem;
             color:#FF4D6D;letter-spacing:4px'>PATTERN 01</div>
-<h2 style='margin:4px 0 6px 0'>The 20-Payment Cliff</h2>
+<h2 style='margin:4px 0 6px 0;color:#EEEEF8;font-family:Syne,sans-serif;font-weight:800'>The 20-Payment Cliff</h2>
 <p style='font-family:DM Mono,monospace;font-size:0.75rem;color:#333348;margin-bottom:16px'>
 Past 20 missed payments, Good scorers almost vanish entirely
 </p>
@@ -80,7 +154,7 @@ fig = go.Figure()
 for s,c in SC.items():
     if s in ct.columns:
         fig.add_trace(go.Bar(name=s, x=ct.index, y=ct[s],
-                             marker_color=c, opacity=0.8))
+                             marker_color=c, opacity=0.85))
 fig.add_vrect(x0=3.5,x1=5.5,fillcolor=POOR,opacity=0.04,line_width=0)
 fig.add_vline(x=3.5,line_dash='dot',line_color=POOR,opacity=0.4)
 fig.update_layout(**BASE, barmode='group', height=320,
@@ -95,7 +169,7 @@ st.markdown('<div style="height:24px"></div>', unsafe_allow_html=True)
 st.markdown("""
 <div style='font-family:DM Mono,monospace;font-size:0.58rem;
             color:#FF4D6D;letter-spacing:4px'>PATTERN 02</div>
-<h2 style='margin:4px 0 6px 0'>The Debt Divide</h2>
+<h2 style='margin:4px 0 6px 0;color:#EEEEF8;font-family:Syne,sans-serif;font-weight:800'>The Debt Divide</h2>
 <p style='font-family:DM Mono,monospace;font-size:0.75rem;color:#333348;margin-bottom:16px'>
 Poor scorers carry 3× more outstanding debt than Good scorers
 </p>
@@ -139,7 +213,7 @@ st.markdown('<div style="height:24px"></div>', unsafe_allow_html=True)
 st.markdown("""
 <div style='font-family:DM Mono,monospace;font-size:0.58rem;
             color:#FF4D6D;letter-spacing:4px'>PATTERN 03</div>
-<h2 style='margin:4px 0 6px 0'>Time is the Unfair Advantage</h2>
+<h2 style='margin:4px 0 6px 0;color:#EEEEF8;font-family:Syne,sans-serif;font-weight:800'>Time is the Unfair Advantage</h2>
 <p style='font-family:DM Mono,monospace;font-size:0.75rem;color:#333348;margin-bottom:16px'>
 Good scorers have nearly 9 extra years of credit history on average
 </p>
@@ -150,13 +224,15 @@ fig3 = go.Figure()
 for s,c in [('Poor',POOR),('Standard',STD),('Good',GOOD)]:
     if s in means:
         fig3.add_trace(go.Bar(x=[means[s]], y=[s], orientation='h',
-                              name=s, marker_color=c, opacity=0.8,
+                              name=s, marker_color=c, opacity=0.85,
                               text=f'{means[s]:.1f} yrs', textposition='outside',
                               textfont=dict(color=c,family='DM Mono')))
 fig3.update_layout(**BASE, showlegend=False, height=200,
                    title=dict(text='Avg Credit History by Tier',
                               font=dict(color='#444460',size=11,family='DM Mono')),
-                   xaxis_title='Years')
+                   xaxis_title='Years',
+                   yaxis=dict(gridcolor=GRID, linecolor=GRID, zerolinecolor=GRID,
+                              tickfont=dict(color='#888899', size=11)))
 st.plotly_chart(fig3, use_container_width=True)
 
 st.markdown('<div style="height:24px"></div>', unsafe_allow_html=True)
@@ -165,7 +241,7 @@ st.markdown('<div style="height:24px"></div>', unsafe_allow_html=True)
 st.markdown("""
 <div style='font-family:DM Mono,monospace;font-size:0.58rem;
             color:#FF4D6D;letter-spacing:4px'>PATTERN 04</div>
-<h2 style='margin:4px 0 6px 0'>The Inquiry Trap</h2>
+<h2 style='margin:4px 0 6px 0;color:#EEEEF8;font-family:Syne,sans-serif;font-weight:800'>The Inquiry Trap</h2>
 <p style='font-family:DM Mono,monospace;font-size:0.75rem;color:#333348;margin-bottom:16px'>
 Every desperate credit application hurts your score — the system punishes people for trying to escape it
 </p>
@@ -182,7 +258,8 @@ for s,c in SC.items():
         fig4.add_trace(go.Scatter(x=ct4.index, y=ct4[s], name=s,
                                   line=dict(color=c,width=2),
                                   mode='lines+markers',
-                                  marker=dict(size=7,color=c)))
+                                  marker=dict(size=7,color=c,
+                                              line=dict(color=BG,width=1.5))))
 fig4.update_layout(**BASE, height=300,
                    title=dict(text='Credit Score by Number of Credit Inquiries',
                               font=dict(color='#444460',size=11,family='DM Mono')),
@@ -194,7 +271,7 @@ st.markdown('<div style="width:100%;height:1px;background:#16161F;margin:32px 0"
 st.markdown("""
 <div style='font-family:DM Mono,monospace;font-size:0.58rem;
             color:#252535;letter-spacing:4px;margin-bottom:12px'>THE CONCLUSION</div>
-<h2 style='margin-bottom:20px'>The trap is behaviour, not income</h2>
+<h2 style='margin-bottom:20px;color:#EEEEF8;font-family:Syne,sans-serif;font-weight:800'>The trap is behaviour, not income</h2>
 """, unsafe_allow_html=True)
 
 for label, color, desc in [
@@ -211,3 +288,5 @@ for label, color, desc in [
         <div style='font-family:DM Mono,monospace;font-size:0.72rem;color:#333348'>{desc}</div>
     </div>
     """, unsafe_allow_html=True)
+
+st.markdown("<div style='height:48px'></div>", unsafe_allow_html=True)
